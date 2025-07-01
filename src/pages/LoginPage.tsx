@@ -42,12 +42,12 @@ export const LoginPage: React.FC = () => {
             <p className="text-gray-600 text-sm mt-1">Entre na sua conta</p>
           </div>
 
-          {/* Demo Credentials */}
+          {/* Info para administradores */}
           <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-6">
-            <h3 className="text-sm font-medium text-purple-800 mb-2">Contas de Demonstração:</h3>
+            <h3 className="text-sm font-medium text-purple-800 mb-2">Para Administradores:</h3>
             <div className="text-xs text-purple-700 space-y-1">
-              <div><strong>Admin:</strong> admin@pedireito.com / admin123</div>
-              <div><strong>Parceiro:</strong> joao.silva@email.com / 123456</div>
+              <div>Use seu email cadastrado (@pedireitoimoveis.com.br)</div>
+              <div>e a senha definida no Supabase Auth</div>
             </div>
           </div>
 

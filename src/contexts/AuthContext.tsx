@@ -1,28 +1,14 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { User as AuthUser } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabase';
 import { User, AuthContextType } from '../types';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Mock users database
-const mockUsers: (User & { password: string })[] = [
-  {
-    id: '1',
-    name: 'Admin Sistema',
-    email: 'admin@indicafacil.com',
-    phone: '(11) 99999-0000',
-    role: 'admin',
-    password: 'admin123',
-    createdAt: '2024-01-01'
-  },
-  {
-    id: '2',
-    name: 'João Silva',
-    email: 'joao.silva@email.com',
-    phone: '(11) 99999-1111',
-    role: 'partner',
-    password: '123456',
-    createdAt: '2024-01-15'
-  }
+// Emails de administradores
+const ADMIN_EMAILS = [
+  'felipe@pedireitoimoveis.com.br',
+  'contato@pedireitoimoveis.com.br'
 ];
 
 interface AuthProviderProps {
@@ -34,71 +20,158 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Check for stored user session
-    const storedUser = localStorage.getItem('indicafacil_user');
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
-    setIsLoading(false);
+    // Verifica sessão existente
+    const getSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        await loadUserProfile(session.user);
+      }
+      setIsLoading(false);
+    };
+
+    getSession();
+
+    // Escuta mudanças na autenticação
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user) {
+        await loadUserProfile(session.user);
+      } else {
+        setUser(null);
+      }
+      setIsLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
+
+  const loadUserProfile = async (authUser: AuthUser) => {
+    try {
+      // Busca ou cria o perfil do usuário
+      let { data: profile, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', authUser.id)
+        .single();
+
+      if (error && error.code === 'PGRST116') {
+        // Usuário não existe, vamos criar
+        const isAdmin = ADMIN_EMAILS.includes(authUser.email || '');
+        const { data: newProfile, error: insertError } = await supabase
+          .from('users')
+          .insert({
+            id: authUser.id,
+            email: authUser.email,
+            name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'Usuário',
+            phone: authUser.user_metadata?.phone || '',
+            role: isAdmin ? 'admin' : 'partner'
+          })
+          .select()
+          .single();
+
+        if (insertError) {
+          console.error('Erro ao criar perfil:', insertError);
+          return;
+        }
+
+        profile = newProfile;
+
+        // Se é um parceiro, criar registro na tabela partners
+        if (!isAdmin) {
+          await supabase
+            .from('partners')
+            .insert({
+              user_id: authUser.id,
+              rank: 'Bronze',
+              points: 0,
+              total_indicacoes: 0,
+              indicacoes_fechadas: 0
+            });
+        }
+      } else if (error) {
+        console.error('Erro ao buscar perfil:', error);
+        return;
+      }
+
+      if (profile) {
+        setUser({
+          id: profile.id,
+          name: profile.name,
+          email: profile.email,
+          phone: profile.phone || '',
+          role: profile.role,
+          createdAt: profile.created_at
+        });
+      }
+    } catch (error) {
+      console.error('Erro ao carregar perfil:', error);
+    }
+  };
 
   const login = async (email: string, password: string): Promise<boolean> => {
     setIsLoading(true);
     
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    const foundUser = mockUsers.find(u => u.email === email && u.password === password);
-    
-    if (foundUser) {
-      const { password: _, ...userWithoutPassword } = foundUser;
-      setUser(userWithoutPassword);
-      localStorage.setItem('indicafacil_user', JSON.stringify(userWithoutPassword));
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+
+      if (error) {
+        console.error('Erro no login:', error);
+        setIsLoading(false);
+        return false;
+      }
+
+      if (data.user) {
+        await loadUserProfile(data.user);
+      }
+
       setIsLoading(false);
       return true;
+    } catch (error) {
+      console.error('Erro no login:', error);
+      setIsLoading(false);
+      return false;
     }
-    
-    setIsLoading(false);
-    return false;
   };
 
   const register = async (name: string, email: string, phone: string, password: string): Promise<boolean> => {
     setIsLoading(true);
     
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    // Check if user already exists
-    const existingUser = mockUsers.find(u => u.email === email);
-    if (existingUser) {
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            name,
+            phone
+          }
+        }
+      });
+
+      if (error) {
+        console.error('Erro no registro:', error);
+        setIsLoading(false);
+        return false;
+      }
+
+      if (data.user) {
+        await loadUserProfile(data.user);
+      }
+
+      setIsLoading(false);
+      return true;
+    } catch (error) {
+      console.error('Erro no registro:', error);
       setIsLoading(false);
       return false;
     }
-    
-    // Create new user
-    const newUser: User & { password: string } = {
-      id: Date.now().toString(),
-      name,
-      email,
-      phone,
-      role: 'partner',
-      password,
-      createdAt: new Date().toISOString()
-    };
-    
-    mockUsers.push(newUser);
-    
-    const { password: _, ...userWithoutPassword } = newUser;
-    setUser(userWithoutPassword);
-    localStorage.setItem('indicafacil_user', JSON.stringify(userWithoutPassword));
-    
-    setIsLoading(false);
-    return true;
   };
 
-  const logout = () => {
+  const logout = async () => {
+    await supabase.auth.signOut();
     setUser(null);
-    localStorage.removeItem('indicafacil_user');
   };
 
   return (

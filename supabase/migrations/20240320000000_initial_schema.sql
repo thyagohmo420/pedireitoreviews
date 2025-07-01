@@ -54,6 +54,17 @@ ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE partners ENABLE ROW LEVEL SECURITY;
 ALTER TABLE indicacoes ENABLE ROW LEVEL SECURITY;
 
+-- Helper function to check if user is admin
+CREATE OR REPLACE FUNCTION is_admin(user_id UUID)
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM users 
+    WHERE id = user_id AND role = 'admin'
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
 -- Users policies
 CREATE POLICY "Users can view their own data" ON users
   FOR SELECT USING (auth.uid() = id);
@@ -61,12 +72,18 @@ CREATE POLICY "Users can view their own data" ON users
 CREATE POLICY "Users can update their own data" ON users
   FOR UPDATE USING (auth.uid() = id);
 
+CREATE POLICY "Admins can view all users" ON users
+  FOR ALL USING (is_admin(auth.uid()));
+
 -- Partners policies
 CREATE POLICY "Partners can view their own data" ON partners
   FOR SELECT USING (auth.uid() = user_id);
 
 CREATE POLICY "Partners can update their own data" ON partners
   FOR UPDATE USING (auth.uid() = user_id);
+
+CREATE POLICY "Admins can view all partners" ON partners
+  FOR ALL USING (is_admin(auth.uid()));
 
 -- Indicacoes policies
 CREATE POLICY "Partners can view their own indicacoes" ON indicacoes
@@ -83,6 +100,9 @@ CREATE POLICY "Partners can update their own indicacoes" ON indicacoes
   FOR UPDATE USING (auth.uid() IN (
     SELECT user_id FROM partners WHERE id = partner_id
   ));
+
+CREATE POLICY "Admins can manage all indicacoes" ON indicacoes
+  FOR ALL USING (is_admin(auth.uid()));
 
 -- Create functions
 CREATE OR REPLACE FUNCTION update_partner_points()
@@ -110,6 +130,6 @@ EXECUTE FUNCTION update_partner_points();
 -- Create admin users
 INSERT INTO users (email, name, role)
 VALUES 
-  ('felipe@pedireito.com.br', 'Felipe', 'admin'),
-  ('contato@pedireito.com.br', 'Contato', 'admin')
+  ('felipe@pedireitoimoveis.com.br', 'Felipe', 'admin'),
+  ('contato@pedireitoimoveis.com.br', 'Contato', 'admin')
 ON CONFLICT (email) DO NOTHING; 
