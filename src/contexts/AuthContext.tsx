@@ -64,6 +64,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         const isAdmin = ADMIN_EMAILS.includes(authUser.email || '');
         console.log('🔐 É admin?', isAdmin, 'Email:', authUser.email);
         
+        // Para admins, apenas dar erro - eles devem ser criados manualmente
+        if (isAdmin) {
+          console.error('❌ Admin não encontrado na tabela users. Execute o script SQL primeiro.');
+          return;
+        }
+        
         const { data: newProfile, error: insertError } = await supabase
           .from('users')
           .insert({
@@ -71,7 +77,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             email: authUser.email,
             name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'Usuário',
             phone: authUser.user_metadata?.phone || '',
-            role: isAdmin ? 'admin' : 'partner'
+            role: 'partner'
           })
           .select()
           .single();
@@ -85,20 +91,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
         profile = newProfile;
 
-        // Se é um parceiro, criar registro na tabela partners
-        if (!isAdmin) {
-          console.log('👥 Criando registro de parceiro...');
-          const partnerResult = await supabase
-            .from('partners')
-            .insert({
-              user_id: authUser.id,
-              rank: 'Bronze',
-              points: 0,
-              total_indicacoes: 0,
-              indicacoes_fechadas: 0
-            });
-          console.log('👥 Resultado parceiro:', partnerResult);
-        }
+        // Criar registro na tabela partners
+        console.log('👥 Criando registro de parceiro...');
+        const partnerResult = await supabase
+          .from('partners')
+          .insert({
+            user_id: authUser.id,
+            rank: 'Bronze',
+            points: 0,
+            total_indicacoes: 0,
+            indicacoes_fechadas: 0
+          });
+        console.log('👥 Resultado parceiro:', partnerResult);
       } else if (error) {
         console.error('❌ Erro ao buscar perfil:', error);
         return;
