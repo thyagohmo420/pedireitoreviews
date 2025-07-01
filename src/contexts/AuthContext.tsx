@@ -46,6 +46,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const loadUserProfile = async (authUser: AuthUser) => {
     try {
+      console.log('🔍 Carregando perfil para:', authUser.email);
+      console.log('🔑 Auth User ID:', authUser.id);
+      
       // Busca ou cria o perfil do usuário
       let { data: profile, error } = await supabase
         .from('users')
@@ -53,9 +56,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         .eq('id', authUser.id)
         .single();
 
+      console.log('📝 Resultado da busca profile:', { profile, error });
+
       if (error && error.code === 'PGRST116') {
         // Usuário não existe, vamos criar
+        console.log('👤 Usuário não existe, criando perfil...');
         const isAdmin = ADMIN_EMAILS.includes(authUser.email || '');
+        console.log('🔐 É admin?', isAdmin, 'Email:', authUser.email);
+        
         const { data: newProfile, error: insertError } = await supabase
           .from('users')
           .insert({
@@ -68,8 +76,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           .select()
           .single();
 
+        console.log('✅ Perfil criado:', { newProfile, insertError });
+
         if (insertError) {
-          console.error('Erro ao criar perfil:', insertError);
+          console.error('❌ Erro ao criar perfil:', insertError);
           return;
         }
 
@@ -77,7 +87,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
         // Se é um parceiro, criar registro na tabela partners
         if (!isAdmin) {
-          await supabase
+          console.log('👥 Criando registro de parceiro...');
+          const partnerResult = await supabase
             .from('partners')
             .insert({
               user_id: authUser.id,
@@ -86,24 +97,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
               total_indicacoes: 0,
               indicacoes_fechadas: 0
             });
+          console.log('👥 Resultado parceiro:', partnerResult);
         }
       } else if (error) {
-        console.error('Erro ao buscar perfil:', error);
+        console.error('❌ Erro ao buscar perfil:', error);
         return;
       }
 
       if (profile) {
-        setUser({
+        const userProfile = {
           id: profile.id,
           name: profile.name,
           email: profile.email,
           phone: profile.phone || '',
           role: profile.role,
           createdAt: profile.created_at
-        });
+        };
+        console.log('✅ Perfil carregado:', userProfile);
+        setUser(userProfile);
       }
     } catch (error) {
-      console.error('Erro ao carregar perfil:', error);
+      console.error('💥 Erro geral ao carregar perfil:', error);
     }
   };
 
