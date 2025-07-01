@@ -5,7 +5,7 @@ import { User, AuthContextType } from '../types';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Emails de administradores
+// Emails de administradores (apenas domínio correto)
 const ADMIN_EMAILS = [
   'felipe@pedireitoimoveis.com.br',
   'contato@pedireitoimoveis.com.br'
